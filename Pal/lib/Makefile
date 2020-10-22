@@ -104,7 +104,6 @@ $(filter-out crypto/mbedtls/crypto/library/aes.c,$(patsubst %.o,%.c,$(crypto_mbe
 objs += \
 	avl_tree.o \
 	crypto/udivmodti4.o \
-	graphene/config.o \
 	graphene/path.o \
 	network/hton.o \
 	network/inet_pton.o \

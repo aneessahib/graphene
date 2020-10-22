@@ -26,6 +26,7 @@
 #include "sgx.h"
 #include "sgx_api.h"
 #include "sgx_attest.h"
+#include "toml.h"
 
 #define TSC_REFINE_INIT_TIMEOUT_USECS 10000000
 
@@ -386,33 +387,62 @@ int _DkAttestationQuote(const PAL_PTR user_report_data, PAL_NUM user_report_data
     sgx_spid_t spid = {0};
     bool linkable = false;
 #else
-    char spid_hex[sizeof(sgx_spid_t) * 2 + 1];
-    ssize_t len = get_config(g_pal_state.root_config, "sgx.ra_client_spid", spid_hex,
-                             sizeof(spid_hex));
-    if (len <= 0) {
-        SGX_DBG(DBG_E, "No Software Provider ID (sgx.ra_client_spid) specified in the manifest. "
+    int ret;
+    assert(g_pal_state.manifest_root);
+    toml_table_t* manifest_sgx = toml_table_in(g_pal_state.manifest_root, "sgx");
+
+    /* read sgx.ra_client_spid from manifest (must be hex string) */
+    toml_raw_t ra_client_spid_raw = manifest_sgx ? toml_raw_in(manifest_sgx, "ra_client_spid")
+                                                 : NULL;
+    if (!ra_client_spid_raw) {
+        SGX_DBG(DBG_E, "No Software Provider ID (\'sgx.ra_client_spid\') specified in manifest. "
                 "Graphene can not perform SGX quote retrieval.\n");
         return -PAL_ERROR_INVAL;
     }
 
-    if (len != sizeof(sgx_spid_t) * 2) {
-        SGX_DBG(DBG_E, "Malformed sgx.ra_client_spid value in the manifest: %s\n", spid_hex);
+    char* ra_client_spid_str = NULL;
+    ret = toml_rtos(ra_client_spid_raw, &ra_client_spid_str);
+    if (ret < 0) {
+        SGX_DBG(DBG_E, "Cannot read \'sgx.ra_client_spid\' (it must be put in quotes!)\n");
+        return -PAL_ERROR_INVAL;
+    }
+
+    if (strlen(ra_client_spid_str) != sizeof(sgx_spid_t) * 2) {
+        SGX_DBG(DBG_E, "Malformed \'sgx.ra_client_spid\' value in the manifest: %s\n",
+                ra_client_spid_str);
+        free(ra_client_spid_str);
         return -PAL_ERROR_INVAL;
     }
 
     sgx_spid_t spid;
-    for (ssize_t i = 0; i < len; i++) {
-        int8_t val = hex2dec(spid_hex[i]);
+    for (ssize_t i = 0; i < strlen(ra_client_spid_str); i++) {
+        int8_t val = hex2dec(ra_client_spid_str[i]);
         if (val < 0) {
-            SGX_DBG(DBG_E, "Malformed sgx.ra_client_spid value in the manifest: %s\n", spid_hex);
+            SGX_DBG(DBG_E, "Malformed \'sgx.ra_client_spid\' value in the manifest: %s\n",
+                    ra_client_spid_str);
+            free(ra_client_spid_str);
             return -PAL_ERROR_INVAL;
         }
         spid[i / 2] = spid[i / 2] * 16 + (uint8_t)val;
     }
 
-    char buf[2];
-    len = get_config(g_pal_state.root_config, "sgx.ra_client_linkable", buf, sizeof(buf));
-    bool linkable = (len == 1 && buf[0] == '1');
+    free(ra_client_spid_str);
+
+    /* read sgx.ra_client_linkable from manifest */
+    bool linkable = false;
+    if (manifest_sgx) {
+        toml_raw_t ra_client_linkable_raw = toml_raw_in(manifest_sgx, "ra_client_linkable");
+        if (ra_client_linkable_raw) {
+            int64_t ra_client_linkable_int;
+            ret = toml_rtoi(ra_client_linkable_raw, &ra_client_linkable_int);
+            if (ret < 0) {
+                SGX_DBG(DBG_E, "Cannot read \'sgx.ra_client_linkable\'\n");
+                return -PAL_ERROR_INVAL;
+            }
+
+            linkable = !!ra_client_linkable_int;
+        }
+    }
 #endif
 
     sgx_quote_nonce_t nonce;
