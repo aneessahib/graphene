@@ -382,12 +382,13 @@ int _DkAttestationQuote(const PAL_PTR user_report_data, PAL_NUM user_report_data
     if (user_report_data_size != sizeof(sgx_report_data_t))
         return -PAL_ERROR_INVAL;
 
+    int ret;
+
 #ifdef SGX_DCAP
     /* for DCAP attestation, spid and linkable arguments are ignored */
     sgx_spid_t spid = {0};
     bool linkable = false;
 #else
-    int ret;
     assert(g_pal_state.manifest_root);
     toml_table_t* manifest_sgx = toml_table_in(g_pal_state.manifest_root, "sgx");
 
@@ -415,7 +416,7 @@ int _DkAttestationQuote(const PAL_PTR user_report_data, PAL_NUM user_report_data
     }
 
     sgx_spid_t spid;
-    for (ssize_t i = 0; i < strlen(ra_client_spid_str); i++) {
+    for (size_t i = 0; i < strlen(ra_client_spid_str); i++) {
         int8_t val = hex2dec(ra_client_spid_str[i]);
         if (val < 0) {
             SGX_DBG(DBG_E, "Malformed \'sgx.ra_client_spid\' value in the manifest: %s\n",
@@ -446,7 +447,7 @@ int _DkAttestationQuote(const PAL_PTR user_report_data, PAL_NUM user_report_data
 #endif
 
     sgx_quote_nonce_t nonce;
-    int ret = _DkRandomBitsRead(&nonce, sizeof(nonce));
+    ret = _DkRandomBitsRead(&nonce, sizeof(nonce));
     if (ret < 0)
         return ret;
 
