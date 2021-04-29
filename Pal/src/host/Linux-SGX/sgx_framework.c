@@ -18,7 +18,7 @@ static size_t g_zero_pages_size = 0;
 
 int open_sgx_driver(bool need_gsgx) {
     if (need_gsgx) {
-        g_gsgx_device = INLINE_SYSCALL(open, 3, "/dev/sgx_enclave", O_RDWR | O_CLOEXEC, 0);
+        g_gsgx_device = INLINE_SYSCALL(open, 3, GSGX_FILE, O_RDWR | O_CLOEXEC, 0);
         if (g_gsgx_device < 0) {
             urts_log_error(
                 "\n\tSystem does not support FSGSBASE instructions, which Graphene requires on SGX.\n\n"
@@ -30,7 +30,7 @@ int open_sgx_driver(bool need_gsgx) {
         }
     }
 
-    g_isgx_device = INLINE_SYSCALL(open, 3, ISGX_FILE, O_RDWR | O_CLOEXEC, 0);
+    g_isgx_device = INLINE_SYSCALL(open, 3, "/dev/sgx_enclave", O_RDWR | O_CLOEXEC, 0);
     if (g_isgx_device < 0) {
         urts_log_error("Cannot open device " ISGX_FILE ". "
                        "Please make sure the Intel SGX kernel module is loaded.\n");
